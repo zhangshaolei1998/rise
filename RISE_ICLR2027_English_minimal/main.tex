@@ -34,13 +34,13 @@ Tool-using language models operate on mutable external state, where a single mis
 
 \section{Introduction}
 
-Language models increasingly complete tasks by calling external tools, and such calls mutate persistent state instead of merely producing text. Recent systems demonstrate strong capability on this setting, from learned tool invocation \citep{schick2023toolformer} and interleaved reasoning and acting \citep{yao2023react} to empirically tuned tool-using agents \citep{oagents2025} and test-time compute strategies that sample, verify, and merge multiple attempts \citep{snell2025scaling,oppo_tts2025}. A tool call that writes to a database, books an itinerary, or edits a file changes what every later call may legally do. However, once an early call fails or returns an unexpected result, the model must repair its own execution before any subsequent step can succeed, and this repair step is where current systems remain fragile.
+Language models increasingly complete tasks by calling external tools, and such calls mutate persistent state and do not merely produce text. Recent systems demonstrate strong capability on this setting, from learned tool invocation \citep{schick2023toolformer} and interleaved reasoning and acting \citep{yao2023react} to empirically tuned tool-using agents \citep{oagents2025} and test-time compute strategies that sample, verify, and merge multiple attempts \citep{snell2025scaling,oppo_tts2025}. A tool call that writes to a database, books an itinerary, or edits a file changes what every later call may legally do. However, once an early call fails or returns an unexpected result, the model must repair its own execution before any subsequent step can succeed, and this repair step is where current systems remain fragile.
 
 \begin{wrapfigure}{r}{0.46\linewidth}
 \vspace{-10pt}
 \centering
 \includegraphics[width=\linewidth]{figures/frd_phenomenon.png}
-\caption{Entering recovery does not restore task progress. The model obtains a valid token at A36 but omits it again at A50, reproducing the error from A08.}
+\caption{Entering recovery does not restore progress. The model obtains a valid token at A36 but omits it at A50, reproducing the error from A08.}
 \label{fig:frd-phenomenon}
 \vspace{-8pt}
 \end{wrapfigure}
@@ -48,22 +48,22 @@ The difficulty is that repairing an execution is a harder problem than detecting
 
 
 
-What makes this failure mode hard to act on is that it cannot be recognized while the model is still running, and the obstacle is structural instead of practical. Judging a repair means attributing a later outcome to an earlier decision, which is a credit assignment question, and the evidence that settles it consists of consequences that the trajectory has yet to produce. An online controller therefore has no access to the very label it would need in order to correct itself. Existing test-time approaches sidestep the problem instead of solving it. Sampling-based methods generate several complete trajectories and select among the finished candidates \citep{oppo_tts2025,wang2023selfconsistency}, so the comparison happens after all repairs have already been committed. Reflection-based methods feed a verbal critique into a retry \citep{shinn2023reflexion,madaan2023selfrefine}, which reuses free-form text that carries no guarantee about which prior structure may be reused. In essence, both families treat a comparison as a terminal judgment, so the information it produces is discarded instead of being converted into a constraint on the next attempt.
+What makes this failure mode hard to act on is that it cannot be recognized while the model is still running, and the obstacle is structural, not practical. Judging a repair means attributing a later outcome to an earlier decision, which is a credit assignment question, and the evidence that settles it consists of consequences that the trajectory has yet to produce. An online controller therefore has no access to the label it would need in order to correct itself. Existing test-time approaches sidestep the problem instead of solving it. Sampling-based methods generate several complete trajectories and select among the finished candidates \citep{oppo_tts2025,wang2023selfconsistency}, so the comparison happens after all repairs have already been committed. Reflection-based methods feed a verbal critique into a retry \citep{shinn2023reflexion,madaan2023selfrefine}, which reuses free-form text that carries no guarantee about which prior structure may be reused. In essence, both families treat a comparison as a terminal judgment, so the information it produces is discarded and never reaches the next attempt.
 
 
 
-To this end, we propose \method, a test-time scaling framework that turns the evidence of a comparison into a constraint on the execution that follows. \method separates what is adjudicable offline from what is usable online. Failed Recovery Decision is reserved as a retrospective label for analysis, while the \emph{Recovery-risk Disagreement Signal} is extracted from public traces during execution. As illustrated in Figure~\ref{fig:rise-overview}, the signal determines where the next attempt must re-ground itself, an accepted trajectory is retained across rounds so that progress is never lost, and each pairwise comparison is converted into structural credit whose provenance is checked before use. Specifically, to keep guidance transferable across fresh environments, \method abstracts every event into a value-free shape that records operation, tool, field names, and result class while discarding literal arguments, so the next rollout is told which structures to preserve or avoid without being handed reusable identifiers. To extract information from failure itself, \method derives preserve credit only from the selected side and avoid credit only from the rejected side, which makes a rejected candidate an active contributor instead of a discarded sample. Through this combination of directed generation and source-constrained credit, \method learns within a single task which structures a later execution should repeat.
+To this end, we propose \method, a test-time scaling framework that turns the evidence of a comparison into a constraint on the execution that follows. \method separates what is adjudicable offline from what is usable online. Failed Recovery Decision is reserved as a retrospective label for analysis, while the \emph{Recovery-risk Disagreement Signal} is extracted from public traces during execution. As illustrated in Figure~\ref{fig:rise-overview}, the signal determines where the next attempt must re-ground itself, an accepted trajectory is retained across rounds so that progress is never lost, and each pairwise comparison is converted into structural credit whose provenance is checked before use. Specifically, to keep guidance transferable across fresh environments, \method abstracts every event into a value-free shape that records operation, tool, field names, and result class while discarding literal arguments. The next rollout then learns which structures to preserve or avoid without receiving any reusable identifier. To extract information from failure itself, \method derives preserve credit only from the selected side and avoid credit only from the rejected side, which makes a rejected candidate an active contributor instead of a discarded sample. Through this combination of directed generation and source-constrained credit, \method learns within a single task which structures a later execution should repeat.
 
 We evaluate \method against Vanilla and Best-of-4 on four tool-calling benchmarks under a matched budget of complete rollouts. Experimental results show that \method outperforms Best-of-4 on every benchmark and every evaluated model, raising AppWorld Test-Challenge scenario completion from 82.73 to 91.37 and OccuBench PASS@1 from 70.68 to 76.96 with GPT-5.6-Sol. Notably, the gains concentrate on scenario-level consistency, where an entire group of related tasks must succeed together. In summary, our key contributions are three-fold.
 \begin{itemize}[leftmargin=1em, itemsep=-1ex, topsep=0ex]
     \item \textbf{Problem Formulation}: To the best of our knowledge, we are the first to isolate failed repair as a distinct failure mode in tool-using language models, and to separate its retrospective label from the public evidence that remains usable during execution.
     \item \textbf{Method}: We propose \method, which directs fresh rollouts by public recovery risk, retains an accepted trajectory, and converts bilateral comparison into source-constrained structural credit, so that rejected candidates still shape later attempts.
-    \item \textbf{Strong Performance}: Experimental results on four tool-calling benchmarks show that \method surpasses Best-of-4 by up to 8.64 points on scenario goal completion under an identical rollout budget, and more importantly, its margin widens precisely on the metrics that aggregate over correlated tasks.
+    \item \textbf{Strong Performance}: Experimental results on four tool-calling benchmarks show that \method surpasses Best-of-4 by up to 8.64 points on scenario goal completion under an identical rollout budget, and more importantly, its margin widens on the metrics that aggregate over correlated tasks.
 \end{itemize}
 
-\section{Failed Repair as a Distinct Failure Mode}
-\label{sec:analysis}
-This section establishes that failed repair is frequent enough to matter and harmful enough to target, and that what distinguishes it from ordinary error is what makes it unusable online. Appendix~\ref{app:adjudication} states the adjudication procedure, and the analyses use DeepSeek-v4.1-Flash.
+\section{Why Does Repair Fail After the Model Detects an Error?}
+\label{sec:failed-repair}
+This section establishes that failed repair is frequent enough to matter and harmful enough to target, and that the property separating it from ordinary error also puts it out of reach online. Appendix~\ref{app:adjudication} states the adjudication procedure, and the analyses use DeepSeek-v4.1-Flash.
 
 \textbf{Retrospective Label}\quad To reason about repair without leaking evaluator information into execution, we first fix what can be judged only after the fact. Let $\tau=(a_1,o_1,\ldots,a_T,o_T,r)$ denote a tool-calling trajectory with actions $a_t$, public observations $o_t$, and final response $r$. For an audited recovery episode $w$, let $F_w,D_w,I_w,L_w$ indicate a recovery need, a recovery attempt, an incorrect decision, and an adverse outcome attributable to that decision. A Failed Recovery Decision is
 \begin{equation}
@@ -79,7 +79,7 @@ R_{\tau,j}=f_{\mathrm{risk}}(x,\tau_{\leq j}),
 \end{equation}
 where $f_{\mathrm{risk}}$ collects failure boundaries, repeated mutations, missing read-back, and explicit tool errors from the public trace. Equation~\ref{eq:rds} reads the public trace alone, so it remains available throughout generation. The signal marks where a later attempt should re-ground itself, while Equation~\ref{eq:frd} supplies the retrospective judgment used for offline analysis.
 
-\textbf{Prevalence and Harm}\quad To establish that failed repair is a recurring phenomenon instead of an artifact of one environment, we measure both quantities under Vanilla and Best-of-4 on the three benchmarks whose traces expose tool-level recovery episodes. As shown in Figure~\ref{fig:frd-rds-distribution}, public recovery risk appears in every benchmark and persists after Best-of-4 selection, while the adjudicated label is uniformly rarer because it additionally demands a complete evidence chain. Trajectories carrying the label complete substantially fewer tasks under either baseline, and the gap is widest where tasks carry the deepest stateful dependencies, since a mis-grounded repair propagates through every dependent call. The persistence after selection is the operative finding, because choosing among four finished trajectories reduces the underlying risk without removing it. Overall, these results motivate using recovery evidence to steer generation itself, and Equation~\ref{eq:rds} is the quantity a generator reads to do so.
+\textbf{Prevalence and Harm}\quad To establish that failed repair recurs across environments, we measure both quantities under Vanilla and Best-of-4 on StateBench, AppWorld, and OccuBench, whose traces expose tool-level recovery episodes. As shown in Figure~\ref{fig:frd-rds-distribution}, public recovery risk appears in every benchmark and persists after Best-of-4 selection, while the adjudicated label is uniformly rarer because it additionally demands a complete evidence chain. Trajectories carrying the label complete substantially fewer tasks under either baseline, and the gap is widest where tasks carry the deepest stateful dependencies, since a mis-grounded repair propagates through every dependent call. The persistence after selection is the operative finding, because choosing among four finished trajectories reduces the underlying risk without removing it. Overall, these results motivate using recovery evidence to steer generation itself, and Equation~\ref{eq:rds} is the quantity a generator reads to do so.
 
 \begin{figure}[t]
 \centering
@@ -87,22 +87,21 @@ where $f_{\mathrm{risk}}$ collects failure boundaries, repeated mutations, missi
 \begin{minipage}[t]{0.215\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/baseline_rds.png}\par\vspace{2pt}\raggedright\normalfont\scriptsize (b) Recovery risk, prevalence.\par\end{minipage}\hfill
 \begin{minipage}[t]{0.215\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/frd_success_vanilla.png}\par\vspace{2pt}\raggedright\normalfont\scriptsize (c) Task success, Vanilla.\par\end{minipage}\hfill
 \begin{minipage}[t]{0.215\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/frd_success_best4.png}\par\vspace{2pt}\raggedright\normalfont\scriptsize (d) Task success, Best-of-4.\par\end{minipage}
-\caption{Failed repair is common and harmful. Both the adjudicated label and the public signal persist after Best-of-4 selection (a, b), and trajectories carrying the label complete substantially fewer tasks under either baseline (c, d), with the widest gap where tasks carry the deepest stateful dependencies.}
+\caption{Failed repair is common and harmful. The adjudicated label and the public signal both persist after Best-of-4 selection (a, b), and trajectories carrying the label complete far fewer tasks under either baseline (c, d).}
 \label{fig:frd-rds-distribution}
 \end{figure}
 
 \section{RISE}
-\label{sec:rise}
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.74\linewidth]{figures/rise_method_overview.png}
-\caption{\method turns each comparison into guidance for the next attempt. Public interactions are mapped to events and recovery risk, a frontier directs one fresh complete rollout, and bilateral credit from both the selected and the rejected candidate constrains later rounds.}
+\includegraphics[width=\linewidth]{figures/rise_method_overview.png}
+\caption{\method turns each comparison into guidance for the next attempt. A frontier built from public events and recovery risk directs one fresh rollout, and bilateral credit from both candidates constrains later rounds.}
 \label{fig:rise-overview}
 \end{figure}
-Section~\ref{sec:analysis} establishes that repair quality is both consequential and unverifiable online. \method addresses this by organizing three updates into a single search over complete executions. The complete trajectory is the unit of generation and acceptance, the public event is the unit of analysis and feedback, and a fresh environment is the boundary of every execution.
+Section~\ref{sec:failed-repair} establishes that repair quality is both consequential and unverifiable online. \method addresses this by organizing three updates into a single search over complete executions. Generation and acceptance operate on complete trajectories, while analysis and feedback operate on public events. Every execution runs in a fresh environment.
 
 \subsection{Accepted Trajectory as the Search State}
-To ensure that guidance never destroys progress already achieved, \method maintains an accepted trajectory instead of continuously editing one attempt. The search begins from an unguided rollout with empty credit and history, and each round executes the original task in a fresh environment, so cross-round guidance may carry event structure while every execution grounds its own identifiers and values.
+To ensure that guidance never destroys progress already achieved, \method maintains an accepted trajectory instead of continuously editing one attempt. The search begins from an unguided rollout with empty credit and history. Each round executes the original task in a fresh environment, so cross-round guidance may carry event structure while every execution grounds its own identifiers and values.
 
 \subsection{Recovery Frontier for Directed Rollouts}
 To convert public risk into an actionable instruction, \method compiles the current trajectory into an event view and builds a frontier that names what the next attempt must recheck. The event map produces $V_t=f_{\mathrm{event}}(I_t)=(E_t,G_t,R_t)$, where $E_t$ contains atomic events with operation, argument, and result fields, $G_t$ contains supported transaction groups, and $R_t$ contains public recovery risk. The frontier and the resulting proposal are
@@ -114,13 +113,13 @@ P_t=f_{\mathrm{roll}}(x,\mathcal{F}_t),
 where $f_{\mathrm{front}}$ fuses current risk with accumulated credit and permitted history, and $f_{\mathrm{roll}}$ executes one complete rollout in a fresh environment. Current risk sets the active focus, and an unresolved issue from earlier credit fills that role when no current risk is present. The frontier is a guidance package for a new execution, never a set of partially executed states.
 
 \subsection{Material Disagreement as a Selection Gate}
-To avoid spending a comparison on two trajectories that differ only cosmetically, \method first tests whether the candidates disagree in a way that matters. The gate computes $D_t=f_{\mathrm{cmp}}(f_{\mathrm{event}}(I_t),f_{\mathrm{event}}(P_t))$ over transaction content and ordering. When $D_t=0$, the accepted trajectory is retained and no selection is invoked. Otherwise a selector compares the two complete candidates through their public representations and returns $q_t\in\{\mathrm{inc},\mathrm{prop}\}$, giving
+To avoid spending a comparison on two trajectories that differ only cosmetically, \method first tests whether the candidates disagree in a way that matters. The gate computes $D_t=f_{\mathrm{cmp}}(f_{\mathrm{event}}(I_t),f_{\mathrm{event}}(P_t))$ over transaction content and ordering. When $D_t=0$, the accepted trajectory is retained and no selection is invoked. Otherwise a selector compares the two complete candidates through their public representations and returns $q_t\in\{\mathrm{inc},\mathrm{prop},\bot\}$, where $\bot$ is a fallback issued when neither reading is well formed, giving
 \begin{equation}
 I_{t+1}=\begin{cases}P_t,&D_t=1\ \text{and}\ q_t=\mathrm{prop},\\[2pt]
 I_t,&\text{otherwise},\end{cases}
 \label{eq:incumbent}
 \end{equation}
-where the selector weighs task coverage, grounding, action order, public effects, recovery, verification, and stopping.
+where the selector weighs task coverage, grounding, action order, public effects, recovery, verification, and stopping. A fallback retains the accepted trajectory and yields no credit.
 
 \subsection{Bilateral Credit with Source Constraints}
 To extract information from the candidate that was rejected, \method derives guidance from both sides of a valid comparison under a provenance rule. Let $V_t^s$ and $V_t^r$ denote the selected and rejected event views. The update is
@@ -128,9 +127,9 @@ To extract information from the candidate that was rejected, \method derives gui
 C_{t+1}=f_{\mathrm{credit}}(V_t^s,V_t^r,D_t,q_t,C_t)=(C^{+}_{t+1},C^{-}_{t+1},z_{t+1}),
 \label{eq:credit}
 \end{equation}
-where $C^{+}$ holds structures to preserve, $C^{-}$ holds structures to avoid, and $z$ records an unresolved issue. Preserve credit comes only from the selected side and avoid credit only from the rejected side, and provenance is validated before any structure is written. Every retained structure is then projected into a value-free shape that keeps operation, event class, tool, field names, argument keys, result class, and interaction type while discarding literal values. The projection separates two kinds of knowledge that a comparison produces together. Structural knowledge, such as the requirement that a read of this resource carry an authenticated session, holds in any instance of the task, while instance knowledge, such as the token string obtained in one episode, holds only in the environment that produced it. Carrying the first across rounds is what makes guidance useful, and discarding the second is what keeps it correct.
+where $C^{+}$ holds structures to preserve, $C^{-}$ holds structures to avoid, and $z$ records an unresolved issue. Preserve credit comes only from the selected side and avoid credit only from the rejected side, and provenance is validated before any structure is written. Every retained structure is then projected into a value-free shape that keeps operation, event class, tool, field names, argument keys, result class, and interaction type while discarding literal values. The projection separates two kinds of knowledge that a comparison produces together. Structural knowledge, such as the requirement that a read of this resource carry an authenticated session, holds in any instance of the task, while instance knowledge, such as the token string obtained in one episode, holds only in the environment that produced it. \method carries the first kind across rounds and discards the second.
 
-This construction yields a property that selection-only scaling cannot express. Since eligibility for preserve credit depends on whether a structure also appears on the rejected side, exchanging the rejected candidate changes the guidance even when the accepted trajectory is unchanged. A comparison therefore returns both a decision about which trajectory to keep and a constraint on how the next attempt is generated, and the second survives even when the first changes nothing. The accepted trajectory, updated credit, and permitted history then pass into the next frontier, and the search returns the accepted trajectory when the schedule ends, so a schedule of $N$ proposals consumes $N+1$ complete rollouts. Algorithm~\ref{alg:rise} in Appendix~\ref{app:implementation} summarizes the procedure.
+This construction yields a property that selection-only scaling cannot express. Since eligibility for preserve credit depends on whether a structure also appears on the rejected side, exchanging the rejected candidate changes the guidance even when the accepted trajectory is unchanged. A comparison therefore returns both a decision about which trajectory to keep and a constraint on how the next attempt is generated, and the second survives even when the first changes nothing. The accepted trajectory, updated credit, and permitted history then pass into the next frontier, and the search returns the accepted trajectory when the schedule ends, so a schedule of $K$ proposals consumes $K+1$ complete rollouts. Algorithm~\ref{alg:rise} in Appendix~\ref{app:implementation} summarizes the procedure.
 
 \section{Experiments}
 
@@ -138,61 +137,49 @@ This construction yields a property that selection-only scaling cannot express. 
 We evaluate on four benchmarks that cover representative forms of complex tool calling, namely StateBench for stateful conversational tool use, AppWorld \citep{trivedi2024appworld} for persistent cross-application interaction, OccuBench for professional tool use, and DeepPlanning Travel for constrained planning. Task counts, splits, and metric definitions appear in Appendix~\ref{app:benchmarks}.
 
 \subsection{Setup}
-We compare \method with Vanilla, which executes a single rollout, and with Best-of-$N$, which we adopt as the representative test-time scaling method because sampling, verification, and result merging have been most systematically studied in that setting for tool-using agents \citep{oagents2025,oppo_tts2025}. We set $N=4$ following its released configuration, and we cap \method at the same number of complete rollouts, so the four candidates of the baseline correspond to one initial trajectory followed by three guided proposals. This makes $4$ the shared upper bound on both the sampling width of the baseline and the iteration depth of \method. We evaluate DeepSeek-v4.1-Flash, Qwen3.8-Max, and GPT-5.6-Sol on all four benchmarks. Tasks, tools, simulators, and evaluators are held fixed across methods within each cohort, and every online decision reads the public trace.
+We compare \method with Vanilla, a single rollout, and with Best-of-$N$. We adopt Best-of-$N$ as the representative test-time scaling method because sampling, verification, and result merging have been most systematically studied in that setting for tool-using agents \citep{oagents2025,oppo_tts2025}. We set $N=4$ following its released configuration, and we cap \method at the same number of complete rollouts, so the four candidates of the baseline correspond to one initial trajectory followed by three guided proposals. This makes $4$ the shared upper bound on both the sampling width of the baseline and the iteration depth of \method. We evaluate DeepSeek-v4.1-Flash, Qwen3.8-Max, and GPT-5.6-Sol on all four benchmarks. Tasks, tools, simulators, and evaluators are held fixed across methods within each cohort, and every online decision reads the public trace.
 
 \subsection{Main Results}
-To determine whether directed rollouts outperform independent sampling at equal cost, we compare all three settings under an identical budget of complete rollouts. As shown in Tables~\ref{tab:statebench}--\ref{tab:deepplanning}, \method improves over both baselines across all four benchmarks and all evaluated models, raising OccuBench PASS@1 from 68.85 to 74.35 with Qwen3.8-Max and AppWorld Test-Challenge scenario completion from 82.73 to 91.37 with GPT-5.6-Sol. Best-of-4 already captures most of what independent sampling offers, lifting OccuBench PASS@1 from 57.85 to 68.85, and \method adds a further 5.50 points at the same rollout budget, which sample diversity cannot explain because the number of complete executions is identical. More importantly, unlike independent sampling, \method constrains where each new rollout spends its attempt and carries the outcome of each comparison forward, so later rollouts are directed instead of independent draws.
+To determine whether directed rollouts outperform independent sampling at equal cost, we compare all three settings under an identical budget of complete rollouts. As shown in Tables~\ref{tab:statebench}--\ref{tab:deepplanning}, \method improves over both baselines across all four benchmarks and all evaluated models, raising OccuBench PASS@1 from 68.85 to 74.35 with Qwen3.8-Max and AppWorld Test-Challenge scenario completion from 82.73 to 91.37 with GPT-5.6-Sol. Best-of-4 already captures most of what independent sampling offers, lifting OccuBench PASS@1 from 57.85 to 68.85. \method adds a further 5.50 points at the same rollout budget, a gain sample diversity cannot explain because the number of complete executions is identical. More importantly, unlike independent sampling, \method constrains where each new rollout spends its attempt and carries the outcome of each comparison forward, so later rollouts are directed, not independent draws.
 
-The margin over Best-of-4 varies with a property of the failure distribution, and reading it this way explains an otherwise puzzling result. Independent sampling protects against \emph{stochastic} failure, where four draws rarely go wrong in the same place, so the maximum over the pool improves as the pool grows. It offers no protection against \emph{systematic} failure, where a model omits the same prerequisite in every draw, because enlarging a pool of identically biased samples leaves the maximum unchanged. For instance, on AppWorld Test-Normal with DeepSeek-v4.1-Flash, Best-of-4 leaves task completion unchanged at 91.07, so its failures there are the repeatable kind, and this is precisely where \method gains, lifting the same metric to 92.26, since an avoided structure recorded from one rejected candidate is unavailable to every later attempt.
+The margin over Best-of-4 varies with a property of the failure distribution, and reading it this way explains an otherwise puzzling result. Independent sampling protects against \emph{stochastic} failure, where four draws rarely go wrong in the same place, so the maximum over the pool improves as the pool grows. It offers no protection against \emph{systematic} failure, where a model omits the same prerequisite in every draw, because enlarging a pool of identically biased samples leaves the maximum unchanged. For instance, on AppWorld Test-Normal with DeepSeek-v4.1-Flash, Best-of-4 leaves task completion unchanged at 91.07. Its failures there are the repeatable kind, and \method lifts the same metric to 92.26 because an avoided structure recorded from one rejected candidate is unavailable to every later attempt.
 
-This reading also predicts which metric should move first. Scenario goal completion requires every task in a related group to pass, so a defect that recurs across the group costs the entire score while task-level completion loses only the affected members. A metric that aggregates over correlated tasks is therefore more sensitive to systematic failure than to stochastic failure. On AppWorld Test-Challenge, \method improves scenario completion over Best-of-4 by 4.31, 7.20, and 8.64 points across the three models, against 1.68, 4.31, and 4.55 points for task completion on the same split, and the ordering holds for every evaluated model, which is the behavior the mechanism predicts instead of an incidental property of one benchmark. Overall, \method's strong results under a matched budget highlight its advantage in converting evidence about repeatable failure into a constraint, which is information that no amount of independent sampling can supply.
+This reading also predicts which metric should move first. Scenario goal completion requires every task in a related group to pass, so a defect that recurs across the group costs the entire score while task-level completion loses only the affected members. A metric that aggregates over correlated tasks is therefore more sensitive to systematic failure than to stochastic failure. On AppWorld Test-Challenge, \method improves scenario completion over Best-of-4 by 4.31, 7.20, and 8.64 points across the three models, against 1.68, 4.31, and 4.55 points for task completion on the same split, and the ordering holds for every evaluated model, which is what the mechanism predicts. Overall, \method's strong results under a matched budget highlight its advantage in converting evidence about repeatable failure into a constraint, which is information that no amount of independent sampling can supply.
 
 \begin{table}[t]
 \centering
 \small
-\begin{minipage}[t]{0.63\linewidth}
+\begin{minipage}{\linewidth}
 \centering
-\caption{Results on StateBench. PASS$^5$ requires completion in all five independent runs. UX is rated from 1 to 5. \textbf{Bold} marks the best within each model.}
+\caption{Results on StateBench. PASS$^5$ requires completion in all five independent runs and UX is rated from 1 to 5. \textbf{Bold} marks the best within each model.}
 \label{tab:statebench}
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{llccc}
+\begin{tabular}{lccccccccc}
 \toprule
-Method & Base LLM & PASS@1 & PASS$^5$ & UX \\
+\multirow{2}{*}{Method} & \multicolumn{3}{c}{DeepSeek-v4.1-Flash} & \multicolumn{3}{c}{Qwen3.8-Max} & \multicolumn{3}{c}{GPT-5.6-Sol} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(l){8-10}
+ & PASS@1 & PASS$^5$ & UX & PASS@1 & PASS$^5$ & UX & PASS@1 & PASS$^5$ & UX \\
 \midrule
-Vanilla & DeepSeek-v4.1-Flash & 65.20 & 38.67 & 3.9709 \\
-Best-of-4 & DeepSeek-v4.1-Flash & 72.13 & 46.67 & 4.1428 \\
-\textbf{\method} & DeepSeek-v4.1-Flash & \textbf{72.67} & \textbf{48.67} & \textbf{4.1499} \\
-\midrule
-Vanilla & Qwen3.8-Max & 69.33 & 41.33 & 4.0217 \\
-Best-of-4 & Qwen3.8-Max & 76.00 & 49.33 & 4.1893 \\
-\textbf{\method} & Qwen3.8-Max & \textbf{81.33} & \textbf{54.67} & \textbf{4.3512} \\
-\midrule
-Vanilla & GPT-5.6-Sol & 71.33 & 42.00 & 4.0658 \\
-Best-of-4 & GPT-5.6-Sol & 78.00 & 50.67 & 4.2374 \\
-\textbf{\method} & GPT-5.6-Sol & \textbf{82.67} & \textbf{56.67} & \textbf{4.3981} \\
+Vanilla & 65.20 & 38.67 & 3.9709 & 69.33 & 41.33 & 4.0217 & 71.33 & 42.00 & 4.0658 \\
+Best-of-4 & 72.13 & 46.67 & 4.1428 & 76.00 & 49.33 & 4.1893 & 78.00 & 50.67 & 4.2374 \\
+\textbf{\method} & \textbf{72.67} & \textbf{48.67} & \textbf{4.1499} & \textbf{81.33} & \textbf{54.67} & \textbf{4.3512} & \textbf{82.67} & \textbf{56.67} & \textbf{4.3981} \\
 \bottomrule
 \end{tabular}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.35\linewidth}
+\end{minipage}
+
+\vspace{8pt}
+\begin{minipage}{\linewidth}
 \centering
-\caption{Results on OccuBench. PASS@1 is the average completion rate over the evaluation instances. `DeepSeek', `Qwen' and `GPT' are DeepSeek-v4.1-Flash, Qwen3.8-Max and GPT-5.6-Sol. \textbf{Bold} marks the best within each model.}
+\caption{Results on OccuBench. PASS@1 is the average completion rate over the evaluation instances. \textbf{Bold} marks the best within each model.}
 \label{tab:occubench}
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{llc}
+\setlength{\tabcolsep}{10pt}
+\begin{tabular}{lccc}
 \toprule
-Method & Base LLM & PASS@1 \\
+Method & DeepSeek-v4.1-Flash & Qwen3.8-Max & GPT-5.6-Sol \\
 \midrule
-Vanilla & DeepSeek & 49.74 \\
-Best-of-4 & DeepSeek & 61.78 \\
-\textbf{\method} & DeepSeek & \textbf{63.35} \\
-\midrule
-Vanilla & Qwen & 57.85 \\
-Best-of-4 & Qwen & 68.85 \\
-\textbf{\method} & Qwen & \textbf{74.35} \\
-\midrule
-Vanilla & GPT & 59.69 \\
-Best-of-4 & GPT & 70.68 \\
-\textbf{\method} & GPT & \textbf{76.96} \\
+Vanilla & 49.74 & 57.85 & 59.69 \\
+Best-of-4 & 61.78 & 68.85 & 70.68 \\
+\textbf{\method} & \textbf{63.35} & \textbf{74.35} & \textbf{76.96} \\
 \bottomrule
 \end{tabular}
 \end{minipage}
@@ -201,25 +188,18 @@ Best-of-4 & GPT & 70.68 \\
 \begin{table}[t]
 \centering
 \small
-\caption{Results on AppWorld. `TGC' is task goal completion and `SGC' is scenario goal completion, which requires every task in a scenario to pass. \textbf{Bold} marks the best within each model.}
+\caption{Results on AppWorld. `TGC' and `SGC' are task and scenario goal completion, and subscripts N and C are Test-Normal and Test-Challenge. \textbf{Bold} marks the best within each model.}
 \label{tab:appworld}
-\begin{tabular}{llcccc}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccccccccccc}
 \toprule
-\multirow{2}{*}{Method} & \multirow{2}{*}{Base LLM} & \multicolumn{2}{c}{Test-Normal} & \multicolumn{2}{c}{Test-Challenge} \\
-\cmidrule(lr){3-4}\cmidrule(l){5-6}
- & & TGC & SGC & TGC & SGC \\
+\multirow{2}{*}{Method} & \multicolumn{4}{c}{DeepSeek-v4.1-Flash} & \multicolumn{4}{c}{Qwen3.8-Max} & \multicolumn{4}{c}{GPT-5.6-Sol} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(l){10-13}
+ & TGC$_{\mathrm{N}}$ & SGC$_{\mathrm{N}}$ & TGC$_{\mathrm{C}}$ & SGC$_{\mathrm{C}}$ & TGC$_{\mathrm{N}}$ & SGC$_{\mathrm{N}}$ & TGC$_{\mathrm{C}}$ & SGC$_{\mathrm{C}}$ & TGC$_{\mathrm{N}}$ & SGC$_{\mathrm{N}}$ & TGC$_{\mathrm{C}}$ & SGC$_{\mathrm{C}}$ \\
 \midrule
-Vanilla & DeepSeek-v4.1-Flash & 91.07 & 80.36 & 87.77 & 75.54 \\
-Best-of-4 & DeepSeek-v4.1-Flash & 91.07 & 82.14 & 88.01 & 77.70 \\
-\textbf{\method} & DeepSeek-v4.1-Flash & \textbf{92.26} & \textbf{85.71} & \textbf{89.69} & \textbf{82.01} \\
-\midrule
-Vanilla & Qwen3.8-Max & 91.07 & 82.14 & 89.93 & 79.14 \\
-Best-of-4 & Qwen3.8-Max & 92.26 & 83.93 & 90.41 & 81.29 \\
-\textbf{\method} & Qwen3.8-Max & \textbf{97.02} & \textbf{89.29} & \textbf{94.72} & \textbf{88.49} \\
-\midrule
-Vanilla & GPT-5.6-Sol & 92.26 & 83.93 & 90.65 & 80.58 \\
-Best-of-4 & GPT-5.6-Sol & 93.45 & 85.71 & 91.13 & 82.73 \\
-\textbf{\method} & GPT-5.6-Sol & \textbf{97.62} & \textbf{92.86} & \textbf{95.68} & \textbf{91.37} \\
+Vanilla & 91.07 & 80.36 & 87.77 & 75.54 & 91.07 & 82.14 & 89.93 & 79.14 & 92.26 & 83.93 & 90.65 & 80.58 \\
+Best-of-4 & 91.07 & 82.14 & 88.01 & 77.70 & 92.26 & 83.93 & 90.41 & 81.29 & 93.45 & 85.71 & 91.13 & 82.73 \\
+\textbf{\method} & \textbf{92.26} & \textbf{85.71} & \textbf{89.69} & \textbf{82.01} & \textbf{97.02} & \textbf{89.29} & \textbf{94.72} & \textbf{88.49} & \textbf{97.62} & \textbf{92.86} & \textbf{95.68} & \textbf{91.37} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -229,39 +209,42 @@ Best-of-4 & GPT-5.6-Sol & 93.45 & 85.71 & 91.13 & 82.73 \\
 \begin{table}[t]
 \centering
 \small
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{4.5pt}
 \caption{Results on DeepPlanning Travel. `Deliv.' is plan delivery, `Comm.' and `Pers.' are constraint satisfaction, and `Comp.' is overall planning quality. \textbf{Bold} marks the best within each model and language.}
 \label{tab:deepplanning}
-\begin{tabular}{llcccccccc}
+\begin{tabular}{lcccccccc}
 \toprule
-\multirow{2}{*}{Method} & \multirow{2}{*}{Base LLM} & \multicolumn{4}{c}{Chinese} & \multicolumn{4}{c}{English} \\
-\cmidrule(lr){3-6}\cmidrule(l){7-10}
- & & Deliv. & Comm. & Pers. & Comp. & Deliv. & Comm. & Pers. & Comp. \\
+\multirow{2}{*}{Method} & \multicolumn{4}{c}{Chinese} & \multicolumn{4}{c}{English} \\
+\cmidrule(lr){2-5}\cmidrule(l){6-9}
+ & Deliv. & Comm. & Pers. & Comp. & Deliv. & Comm. & Pers. & Comp. \\
 \midrule
-Vanilla & DeepSeek-v4.1-Flash & 85.83 & 39.27 & 27.94 & 32.71 & 90.83 & 45.62 & 25.83 & 35.84 \\
-Best-of-4 & DeepSeek-v4.1-Flash & 89.17 & 43.18 & 30.86 & 36.42 & 93.33 & 49.37 & 28.94 & 39.58 \\
-\textbf{\method} & DeepSeek-v4.1-Flash & \textbf{95.00} & \textbf{49.86} & \textbf{36.41} & \textbf{42.18} & \textbf{97.50} & \textbf{56.13} & \textbf{34.28} & \textbf{45.31} \\
+\multicolumn{9}{l}{\textit{DeepSeek-v4.1-Flash}} \\
+Vanilla & 85.83 & 39.27 & 27.94 & 32.71 & 90.83 & 45.62 & 25.83 & 35.84 \\
+Best-of-4 & 89.17 & 43.18 & 30.86 & 36.42 & 93.33 & 49.37 & 28.94 & 39.58 \\
+\textbf{\method} & \textbf{95.00} & \textbf{49.86} & \textbf{36.41} & \textbf{42.18} & \textbf{97.50} & \textbf{56.13} & \textbf{34.28} & \textbf{45.31} \\
 \midrule
-Vanilla & Qwen3.8-Max & 89.17 & 41.63 & 29.73 & 34.58 & 94.17 & 47.86 & 27.64 & 37.79 \\
-Best-of-4 & Qwen3.8-Max & 92.50 & 45.82 & 32.85 & 38.47 & 95.83 & 51.74 & 30.92 & 41.63 \\
-\textbf{\method} & Qwen3.8-Max & \textbf{95.83} & \textbf{51.47} & \textbf{38.64} & \textbf{44.08} & \textbf{97.50} & \textbf{58.08} & \textbf{36.18} & \textbf{47.18} \\
+\multicolumn{9}{l}{\textit{Qwen3.8-Max}} \\
+Vanilla & 89.17 & 41.63 & 29.73 & 34.58 & 94.17 & 47.86 & 27.64 & 37.79 \\
+Best-of-4 & 92.50 & 45.82 & 32.85 & 38.47 & 95.83 & 51.74 & 30.92 & 41.63 \\
+\textbf{\method} & \textbf{95.83} & \textbf{51.47} & \textbf{38.64} & \textbf{44.08} & \textbf{97.50} & \textbf{58.08} & \textbf{36.18} & \textbf{47.18} \\
 \midrule
-Vanilla & GPT-5.6-Sol & 90.83 & 42.75 & 30.58 & 35.66 & 95.00 & 48.71 & 28.37 & 38.62 \\
-Best-of-4 & GPT-5.6-Sol & 93.33 & 46.91 & 33.72 & 39.58 & 96.67 & 52.63 & 31.59 & 42.51 \\
-\textbf{\method} & GPT-5.6-Sol & \textbf{98.33} & \textbf{53.36} & \textbf{39.46} & \textbf{45.91} & \textbf{99.17} & \textbf{59.41} & \textbf{37.73} & \textbf{48.69} \\
+\multicolumn{9}{l}{\textit{GPT-5.6-Sol}} \\
+Vanilla & 90.83 & 42.75 & 30.58 & 35.66 & 95.00 & 48.71 & 28.37 & 38.62 \\
+Best-of-4 & 93.33 & 46.91 & 33.72 & 39.58 & 96.67 & 52.63 & 31.59 & 42.51 \\
+\textbf{\method} & \textbf{98.33} & \textbf{53.36} & \textbf{39.46} & \textbf{45.91} & \textbf{99.17} & \textbf{59.41} & \textbf{37.73} & \textbf{48.69} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \section{Analysis}
-We conduct the analyses on DeepSeek-v4.1-Flash over the benchmarks that expose tool-level recovery episodes, matching the setting of Section~\ref{sec:analysis}. We first isolate which component of \method carries the gain, then trace the mechanism in a concrete execution, then measure whether the targeted failure mode declines, and finally locate where the improvements fall.
+Every analysis below uses DeepSeek-v4.1-Flash. We first isolate which component of \method carries the gain on OccuBench, then trace the mechanism through one AppWorld execution, and then measure the targeted failure mode and the distribution of gains on StateBench, AppWorld, and OccuBench, matching the setting of Section~\ref{sec:failed-repair}.
 
 \subsection{Ablation Study on Guidance Components}
 \begin{wraptable}{r}{0.40\linewidth}
 \vspace{-14pt}
 \centering
 \small
-\caption{Ablation on OccuBench. Each variant removes one guidance component under a fixed rollout budget. \textbf{Bold} marks the best result.}
+\caption{Ablation on OccuBench with DeepSeek-v4.1-Flash. Each variant alters one guidance component under a fixed rollout budget. \textbf{Bold} marks the best result.}
 \label{tab:ablation}
 \setlength{\tabcolsep}{5pt}
 \begin{tabular}{lc}
@@ -282,30 +265,32 @@ Pairwise summary & 60.73 \\
 \end{wraptable}
 To determine whether the three updates in \method contribute independently or function as one coupled process, we remove each in turn on OccuBench while holding the task manifest, model, selector budget, and evaluation protocol fixed. \textbf{No recovery focus} withholds the explicit target supplied by current public risk while retaining events and other feedback. \textbf{No event credit} keeps candidate comparison and acceptance but blocks credit from reaching later rollouts. \textbf{Pairwise summary} replaces structural credit with a free-form summary of the two candidates.
 
-As shown in Table~\ref{tab:ablation}, every variant falls below full \method, and the ordering among them is informative. Withholding the recovery focus produces the steepest decline, at 10.21 points below full \method, which indicates that naming a concrete target contributes more than exposing the raw trajectory, since the trajectory remains fully available in this condition. Blocking event credit costs 6.28 points even though selection and acceptance are untouched. Carrying comparison evidence across rounds is therefore a separate mechanism from choosing a winner. Replacing structural credit with a free-form summary recovers part of that loss and still ends 2.62 points short, which shows that the organization of feedback matters beyond its presence. In particular, each variant also falls below Best-of-4 at the same rollout budget, which locates \method within a general trade. Independent sampling spends its budget on variance, while directed search spends it on information, committing later attempts to what earlier ones revealed. A method that commits to direction without an accurate signal obtains neither, since it has surrendered the variance that would have saved it. Overall, the ablation results highlight that a search must be aimed as well as correlated, since one update supplies the target, one carries the evidence forward, and one constrains what that evidence may assert.
+As shown in Table~\ref{tab:ablation}, every variant falls below full \method, and the ordering among them is informative. Withholding the recovery focus produces the steepest decline, at 10.21 points below full \method, which indicates that naming a concrete target contributes more than exposing the raw trajectory, since the trajectory remains fully available in this condition. Blocking event credit costs 6.28 points even though selection and acceptance are untouched. Carrying comparison evidence across rounds is therefore a separate mechanism from choosing a winner. Replacing structural credit with a free-form summary recovers part of that loss and still ends 2.62 points short, which shows that the organization of feedback matters beyond its presence. In particular, each variant also falls below Best-of-4 at the same rollout budget, which locates \method within a general trade. Independent sampling spends its budget on variance, while directed search spends it on information, committing later attempts to what earlier ones revealed. A method that commits to direction without an accurate signal obtains neither, since it has surrendered the variance that would have saved it. Overall, the ablation results highlight that a search must be aimed as well as correlated, since removing any single update leaves later rollouts correlated with earlier ones but no longer pointed at the defect.
 
 
 
 \subsection{Case Study on a Directed Repair}
-To trace how the intended mechanism fires within a single task, we follow one AppWorld execution end to end. The first two comparisons retain the accepted trajectory, so no candidate yet improves on it. The third proposal receives a frontier naming the failed authenticated read and begins in a fresh environment. It initially repeats unauthenticated reads, then consults the tool specification, supplies the missing credential on the dependent call, and passes every official check. Overall, as shown in Figure~\ref{fig:rise-recovery-case}, the repair succeeds at exactly the point the frontier identified, which highlights that guidance localizes the defect to the call the baseline left unrepaired.
-
-\begin{figure}[t]
+\begin{wrapfigure}{r}{0.42\linewidth}
+\vspace{-14pt}
 \centering
-\includegraphics[width=0.55\linewidth]{figures/rise_recovery_case.png}
-\caption{Guidance localizes the defect to the dependent call. The directed candidate supplies the missing credential at the retry that the baseline left unauthenticated, then completes every official check, starting from a fresh environment instead of repairing the baseline in place.}
+\includegraphics[width=\linewidth]{figures/rise_recovery_case.png}
+\caption{Guidance localizes the defect to the dependent call that the baseline left unauthenticated.}
 \label{fig:rise-recovery-case}
-\end{figure}
+\vspace{-12pt}
+\end{wrapfigure}
+To trace how the intended mechanism fires within a single task, we follow one AppWorld execution end to end. The first two comparisons retain the accepted trajectory, so no candidate yet improves on it. The third proposal receives a frontier naming the failed authenticated read and begins in a fresh environment. It initially repeats unauthenticated reads, then consults the tool specification, supplies the missing credential on the dependent call, and passes every official check. Overall, as shown in Figure~\ref{fig:rise-recovery-case}, the repair succeeds at the point the frontier identified, which highlights that guidance localizes the defect to the call the baseline left unrepaired.
 
-\subsection{Reduction of Failed Repair in Final Trajectories}
-To measure how far \method suppresses the failure mode it targets, we compute both the adjudicated label and the public signal in the trajectories each method finally returns. As shown in Figure~\ref{fig:analysis-frd-rds}, \method lowers both quantities across the three benchmarks, and the reduction in public risk is the larger of the two because the signal covers every observable risk while the label additionally requires an attributable adverse outcome. Overall, the two panels highlight that directed rollouts avoid repeating high-risk structures and return fewer trajectories that terminate with recovery still unresolved.
-
-\begin{figure}[t]
+\subsection{Reduction of Failed Repair}
+\begin{wrapfigure}{r}{0.45\linewidth}
+\vspace{-14pt}
 \centering
-\begin{minipage}[t]{0.30\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/rise_frd_prevalence.png}\par\vspace{2pt}\raggedright\normalfont\footnotesize (a) Adjudicated failed repair.\par\end{minipage}\hspace{0.05\linewidth}
-\begin{minipage}[t]{0.30\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/rise_rds_prevalence.png}\par\vspace{2pt}\raggedright\normalfont\footnotesize (b) Public recovery risk.\par\end{minipage}
-\caption{\method suppresses the failure mode it targets. Final trajectories carry less adjudicated failed repair and substantially less public recovery risk than either baseline. The gain therefore arrives through the intended mechanism.}
+\begin{minipage}[t]{0.48\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/rise_frd_prevalence.png}\par\vspace{2pt}\centering\normalfont\scriptsize (a) Failed repair.\par\end{minipage}\hfill
+\begin{minipage}[t]{0.48\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/rise_rds_prevalence.png}\par\vspace{2pt}\centering\normalfont\scriptsize (b) Recovery risk.\par\end{minipage}
+\caption{\method suppresses the failure mode it targets in the trajectories it finally returns.}
 \label{fig:analysis-frd-rds}
-\end{figure}
+\vspace{-12pt}
+\end{wrapfigure}
+To measure how far \method suppresses the failure mode it targets, we compute both the adjudicated label and the public signal in the trajectories each method finally returns. As shown in Figure~\ref{fig:analysis-frd-rds}, \method lowers both quantities across the three benchmarks, and the reduction in public risk is the larger of the two because the signal covers every observable risk while the label additionally requires an attributable adverse outcome. Overall, the two panels highlight that directed rollouts avoid repeating high-risk structures and return fewer trajectories that terminate with recovery still unresolved.
 
 \subsection{Effectiveness on Risk-Positive Tasks}
 To locate where the gains fall, we fix cohorts of tasks whose baseline trajectories already exhibit recovery risk and evaluate every method on that identical task set, which keeps the denominator constant across methods. As shown in Figure~\ref{fig:cohort-success}, \method improves over Vanilla on both the label-positive and signal-positive cohorts across all three benchmarks, with the widest margins on the label-positive cohort where the targeted defect is known to be present. The same procedure applied to Best-of-4 cohorts yields the same conclusion, with the strongest result on the label-positive AppWorld cohort. In particular, \method begins from its own unguided rollout instead of continuing the trajectory that defined the cohort, so these gains come from a fresh directed search. Overall, the cohort results highlight that the margin grows with the density of the defect the method was built to address.
@@ -316,7 +301,7 @@ To locate where the gains fall, we fix cohorts of tasks whose baseline trajector
 \begin{minipage}[t]{0.215\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/cohort_rds_success.png}\par\vspace{2pt}\raggedright\normalfont\footnotesize (b) Signal-positive, Vanilla.\par\end{minipage}\hfill
 \begin{minipage}[t]{0.215\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/best4_frd_success.png}\par\vspace{2pt}\raggedright\normalfont\footnotesize (c) Label-positive, Best-of-4.\par\end{minipage}\hfill
 \begin{minipage}[t]{0.215\linewidth}\vspace{0pt}\includegraphics[width=\linewidth]{figures/best4_rds_success.png}\par\vspace{2pt}\raggedright\normalfont\footnotesize (d) Signal-positive, Best-of-4.\par\end{minipage}
-\caption{Gains concentrate on tasks that carry recovery risk. On fixed cohorts with an identical denominator across methods, \method improves most where the targeted defect is known to be present, and the conclusion holds whether the cohort is drawn from Vanilla or from the stronger Best-of-4 baseline.}
+\caption{Gains concentrate on tasks that carry recovery risk. On fixed cohorts with an identical denominator, \method improves most where the targeted defect is present, whether the cohort comes from Vanilla or from Best-of-4.}
 \label{fig:cohort-success}
 \end{figure}
 
@@ -330,9 +315,9 @@ To locate where the gains fall, we fix cohorts of tasks whose baseline trajector
 \textbf{Positioning}\quad In this work, we target the repair step that follows an unexpected tool result, directing a later attempt from the evidence a comparison produces. Unlike selection-based scaling, which discards every candidate it does not choose, \method converts each comparison into source-constrained structural credit, so a rejected candidate continues to shape later rollouts. Unlike reflection-based refinement, which carries free-form text, \method restricts what may transfer to value-free event shapes, which keeps guidance usable in a fresh environment and prevents stale identifiers from being replayed.
 
 \section{Conclusion}
-We identify failed repair as a distinct failure mode in tool-using language models, where a model detects an anomaly, acts on it, and still leaves the task broken. Because such a failure is adjudicable only after execution ends, we build \method on the public evidence available during a run, so that recovery risk directs each fresh rollout, an accepted trajectory preserves progress, and bilateral credit turns every comparison into a constraint on what follows.
+We identify failed repair as a distinct failure mode in tool-using language models, where a model detects an anomaly, acts on it, and still leaves the task broken. Because such a failure is adjudicable only after execution ends, we build \method on the public evidence available during a run. Recovery risk directs each fresh rollout, an accepted trajectory preserves progress, and bilateral credit turns every comparison into a constraint on what follows.
 
-The results support a view of test-time compute as a choice about what a budget purchases. Sampling purchases variance and pays off against failures that differ between attempts, while \method purchases information about failures that repeat, which is why its margin reaches 8.64 points over Best-of-4 on metrics that aggregate over correlated tasks. More generally, turning the evidence of an inference-time comparison into a constraint is what converts a larger budget into a better one.
+The results support a view of test-time compute as a choice about what a budget purchases. Sampling purchases variance and pays off against failures that differ between attempts, while \method purchases information about failures that repeat, which is why its margin reaches 8.64 points over Best-of-4 on metrics that aggregate over correlated tasks. More generally, a larger budget becomes a better one once the evidence of each comparison constrains the execution that follows.
 
 \subsection*{AI Use Statement}
 Generative AI tools assisted with language drafting. The authors are responsible for all claims and results reported in this paper.
@@ -391,7 +376,7 @@ The event adapter supplies benchmark-specific parsing to a single search loop. S
 
 \section{Adjudication Protocol}
 \label{app:adjudication}
-Every quantity reported in Section~\ref{sec:analysis} depends on how a recovery episode is judged, so we state the procedure before the results that rely on it. An episode enters adjudication only when the public trace contains a concrete recovery entry, meaning an explicit diagnosis, a retry, or a corrective call that follows an anomaly. The adjudicator then answers three questions in order. It first determines whether a recovery need exists, which may originate from a failed call, an inconsistent state, or a user-reported problem. It next determines whether the trajectory attempts a recovery decision at that point. It finally determines whether an adverse outcome follows and whether that outcome is attributable to the decision under review.
+Every quantity reported in Section~\ref{sec:failed-repair} depends on how a recovery episode is judged, so we state the procedure before the results that rely on it. An episode enters adjudication only when the public trace contains a concrete recovery entry, meaning an explicit diagnosis, a retry, or a corrective call that follows an anomaly. The adjudicator then answers three questions in order. It first determines whether a recovery need exists, which may originate from a failed call, an inconsistent state, or a user-reported problem. It next determines whether the trajectory attempts a recovery decision at that point. It finally determines whether an adverse outcome follows and whether that outcome is attributable to the decision under review.
 
 An episode is labelled positive when all three answers are affirmative and the trace supports the attribution, and the remaining episodes are recorded under their observed outcome. We record the recovery outcome separately from whether the benchmark task ultimately passed, since a later successful repair does not retract an earlier failed one.
 
